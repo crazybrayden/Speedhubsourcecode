@@ -1,4 +1,4 @@
--- Lavender Hub - WindUI Version (Part 1/6)
+-- Lavender Hub - WindUI Version (FIXED)
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 -- Services
@@ -10,6 +10,17 @@ local VirtualUser = game:GetService("VirtualUser")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+
+-- Player
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Remotes - FIXED: Find correct remotes
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local UseItemRemote = Remotes:WaitForChild("UseItem")
+local MakeHoneyRemote = Remotes:WaitForChild("MakeHoney")
+local UseMachineRemote = Remotes:WaitForChild("UseMachine")
 
 -- Configuration
 local GRID_SIZE = 6
@@ -185,8 +196,6 @@ local sprinklerConfigs = {
     }
 }
 
-local player = Players.LocalPlayer
-local events = ReplicatedStorage:WaitForChild("Events", 10)
 local digRunning = false
 
 -- Console System
@@ -208,11 +217,13 @@ local function getCurrentPollen()
     return 0
 end
 
--- Get current honey value
+-- Get current honey value - FIXED
 local function getCurrentHoney()
     for _, child in pairs(player:GetChildren()) do
-        if child:IsA("NumberValue") and child.Name:lower():find("honey") then
-            return child.Value
+        if child:IsA("NumberValue") then
+            if child.Name:lower():find("honey") then
+                return child.Value
+            end
         end
     end
     return 0
@@ -297,8 +308,9 @@ local function addToConsole(message)
     end
     
     if consoleLabelElement then
-        consoleLabelElement:SetText(table.concat(consoleLogs, "\n"))
+        consoleLabelElement:SetDesc(table.concat(consoleLogs, "\n"))
     end
+    print("[Lavender Hub] " .. message)
 end
 
 -- Auto-Save Functions
@@ -331,7 +343,9 @@ local function saveSettings()
     
     if success then
         local writeSuccess, writeError = pcall(function()
-            writefile("LavenderHub_WindUI_Settings.txt", encoded)
+            if writefile then
+                writefile("LavenderHub_WindUI_Settings.txt", encoded)
+            end
         end)
         if writeSuccess then
             addToConsole("Settings saved")
@@ -380,13 +394,13 @@ local function loadSettings()
     return false
 end
 
--- Toys/Boosters Functions
+-- Toys/Boosters Functions - FIXED
 local function useMountainBooster()
     local args = {
         "Mountain Booster",
         0
     }
-    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("UseMachine"):FireServer(unpack(args))
+    UseMachineRemote:FireServer(unpack(args))
     lastMountainBoosterTime = tick()
     addToConsole("🏔️ Mountain Booster used")
 end
@@ -396,7 +410,7 @@ local function useRedBooster()
         "Red Booster",
         0
     }
-    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("UseMachine"):FireServer(unpack(args))
+    UseMachineRemote:FireServer(unpack(args))
     lastRedBoosterTime = tick()
     addToConsole("🔴 Red Booster used")
 end
@@ -406,7 +420,7 @@ local function useBlueBooster()
         "Blue Booster",
         0
     }
-    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("UseMachine"):FireServer(unpack(args))
+    UseMachineRemote:FireServer(unpack(args))
     lastBlueBoosterTime = tick()
     addToConsole("🔵 Blue Booster used")
 end
@@ -416,12 +430,12 @@ local function useWealthClock()
         "Ticket Dispenser",
         22
     }
-    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("UseMachine"):FireServer(unpack(args))
+    UseMachineRemote:FireServer(unpack(args))
     lastWealthClockTime = tick()
     addToConsole("⏰ Wealth Clock used")
 end
 
--- Ticket Converter Functions
+-- Ticket Converter Functions - FIXED
 local function useTicketConverter()
     if not useTicketConverters then return false end
     if tick() - lastConverterUseTime < converterCooldown then return false end
@@ -433,7 +447,7 @@ local function useTicketConverter()
     }
     
     local success = pcall(function()
-        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("UseMachine"):FireServer(unpack(args))
+        UseMachineRemote:FireServer(unpack(args))
         return true
     end)
     
@@ -487,7 +501,7 @@ local function runAntiLag()
     }
 
     local deleted = 0
-    for _, obj in pairs(workspace:GetDescendants()) do
+    for _, obj in pairs(Workspace:GetDescendants()) do
         if toggles.antiLag then
             local name = obj.Name:lower()
             for _, target in pairs(targets) do
@@ -510,7 +524,7 @@ end
 
 -- Performance Monitoring
 local function updatePerformanceStats()
-    toggles.performanceStats.fps = math.floor(1 / RunService.Heartbeat:Wait())
+    toggles.performanceStats.fps = math.floor(1 / RunService.RenderStepped:Wait())
     
     local stats = game:GetService("Stats")
     local memory = stats:FindFirstChild("Workspace") and stats.Workspace:FindFirstChild("Memory")
@@ -518,9 +532,18 @@ local function updatePerformanceStats()
         toggles.performanceStats.memory = math.floor(memory:GetValue() / 1024 / 1024)
     end
     
-    if fpsLabel then fpsLabel:SetText("FPS: " .. toggles.performanceStats.fps) end
-    if memoryLabel then memoryLabel:SetText("Memory: " .. toggles.performanceStats.memory .. " MB") end
-    if objectsLabel then objectsLabel:SetText("Objects Deleted: " .. toggles.objectsDeleted) end
+    if fpsLabel then 
+        fpsLabel:SetTitle("FPS: " .. toggles.performanceStats.fps)
+        fpsLabel:SetDesc("Frames per second")
+    end
+    if memoryLabel then 
+        memoryLabel:SetTitle("Memory: " .. toggles.performanceStats.memory .. " MB")
+        memoryLabel:SetDesc("Memory usage")
+    end
+    if objectsLabel then 
+        objectsLabel:SetTitle("Objects Deleted: " .. toggles.objectsDeleted)
+        objectsLabel:SetDesc("Anti-lag objects deleted")
+    end
 end
 
 -- Utility Functions
@@ -614,16 +637,20 @@ local function checkHiveOwnership()
     end
 end
 
--- Smooth Tween Movement System
+-- Get character safely
+local function getCharacterSafe()
+    return player.Character or player.CharacterAdded:Wait()
+end
+
+-- Smooth Tween Movement System - FIXED
 local function smoothTweenToPosition(targetPos)
-    local character = GetCharacter()
-    local humanoid = character:FindFirstChild("Humanoid")
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local character = getCharacterSafe()
+    local humanoid = character:WaitForChild("Humanoid")
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
     if not humanoid or not humanoidRootPart then return false end
 
     local SPEED = toggles.tweenSpeed
     local TARGET_HEIGHT = 3
-    local ANTI_FLING_FORCE = Vector3.new(0, -5, 0)
     
     local startPos = humanoidRootPart.Position
     local adjustedTargetPos = Vector3.new(
@@ -631,152 +658,70 @@ local function smoothTweenToPosition(targetPos)
         targetPos.Y + TARGET_HEIGHT,
         targetPos.Z
     )
-    local originalLookVector = humanoidRootPart.CFrame.LookVector
     
-    local directDistance = (startPos - adjustedTargetPos).Magnitude
-    local duration = directDistance / SPEED
+    local distance = (startPos - adjustedTargetPos).Magnitude
+    local duration = distance / SPEED
     
-    humanoid:ChangeState(Enum.HumanoidStateType.Swimming)
+    humanoid:ChangeState(Enum.HumanoidStateType.Flying)
     humanoid.AutoRotate = false
     
-    if humanoidRootPart:FindFirstChild("MovementActive") then
-        humanoidRootPart.MovementActive:Destroy()
-    end
+    local tweenInfo = TweenInfo.new(
+        duration,
+        Enum.EasingStyle.Linear,
+        Enum.EasingDirection.Out,
+        0,
+        false,
+        0
+    )
     
-    local movementTracker = Instance.new("BoolValue")
-    movementTracker.Name = "MovementActive"
-    movementTracker.Parent = humanoidRootPart
+    local tween = TweenService:Create(humanoidRootPart, tweenInfo, {
+        CFrame = CFrame.new(adjustedTargetPos)
+    })
     
-    local movementCompleted = false
+    tween:Play()
+    
+    local success = true
     local startTime = tick()
     
-    local connection
-    connection = RunService.Heartbeat:Connect(function()
-        if not movementTracker.Parent then
-            connection:Disconnect()
-            return
+    while tick() - startTime < duration + 2 do
+        if not humanoidRootPart or not humanoidRootPart.Parent then
+            success = false
+            break
         end
-        
-        local progress = math.min((tick() - startTime) / duration, 1)
-        local currentPos = startPos + (adjustedTargetPos - startPos) * progress
-        
-        currentPos = Vector3.new(
-            currentPos.X,
-            startPos.Y + (adjustedTargetPos.Y - startPos.Y) * progress,
-            currentPos.Z
-        )
-        
-        humanoidRootPart.CFrame = CFrame.new(currentPos, currentPos + originalLookVector)
-        
-        humanoidRootPart.Velocity = progress > 0.9 and ANTI_FLING_FORCE or Vector3.new(0, math.min(humanoidRootPart.Velocity.Y, 0), 0)
-        
-        if progress >= 1 then
-            connection:Disconnect()
-            movementTracker:Destroy()
-            humanoid.AutoRotate = true
-            humanoid:ChangeState(Enum.HumanoidStateType.Running)
-            
-            local currentOrientation = humanoidRootPart.CFrame.Rotation
-            humanoidRootPart.CFrame = CFrame.new(
-                targetPos.X,
-                targetPos.Y + TARGET_HEIGHT,
-                targetPos.Z
-            ) * currentOrientation
-            
-            humanoidRootPart.Velocity = Vector3.zero
-            task.wait(0.1)
-            humanoidRootPart.Velocity = Vector3.zero
-            movementCompleted = true
-        end
-    end)
-    
-    character.AncestryChanged:Connect(function()
-        if not character.Parent then
-            connection:Disconnect()
-            if movementTracker.Parent then 
-                movementTracker:Destroy() 
-            end
-        end
-    end)
-    
-    local waitStart = tick()
-    while not movementCompleted and tick() - waitStart < duration + 5 do
         task.wait(0.1)
     end
     
-    return movementCompleted
+    if humanoidRootPart then
+        humanoid.AutoRotate = true
+        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+    end
+    
+    return success
 end
 
--- Improved Walk Movement with Pathfinding
+-- Improved Walk Movement with Pathfinding - SIMPLIFIED
 local function moveToPositionWalk(targetPos)
-    local character = GetCharacter()
-    local humanoid = character:FindFirstChild("Humanoid")
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local character = getCharacterSafe()
+    local humanoid = character:WaitForChild("Humanoid")
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
     if not humanoid or not humanoidRootPart then return false end
     
-    local path = PathfindingService:CreatePath({
-        AgentRadius = 2,
-        AgentHeight = 5,
-        AgentCanJump = true,
-        WaypointSpacing = 4,
-        Costs = {}
-    })
+    humanoid:MoveTo(targetPos)
     
-    local startPos = humanoidRootPart.Position
-    local success = pcall(function()
-        path:ComputeAsync(startPos, targetPos)
-    end)
-    
-    if success and path.Status == Enum.PathStatus.Success then
-        local waypoints = path:GetWaypoints()
-        
-        for i, waypoint in ipairs(waypoints) do
-            if i > 1 then
-                humanoid:MoveTo(waypoint.Position)
-                
-                local startTime = tick()
-                while (humanoidRootPart.Position - waypoint.Position).Magnitude > 6 do
-                    if tick() - startTime > 8 then
-                        humanoid.Jump = true
-                        task.wait(0.5)
-                        if tick() - startTime > 12 then
-                            return false
-                        end
-                    end
-                    task.wait(0.1)
-                end
-                
-                if waypoint.Action == Enum.PathWaypointAction.Jump then
-                    humanoid.Jump = true
-                    task.wait(0.5)
-                end
-            end
+    local startTime = tick()
+    while (humanoidRootPart.Position - targetPos).Magnitude > 10 do
+        if tick() - startTime > 20 then
+            return false
         end
         
-        humanoid:MoveTo(targetPos)
-        local finalStartTime = tick()
-        while (humanoidRootPart.Position - targetPos).Magnitude > 10 do
-            if tick() - finalStartTime > 10 then
-                return false
-            end
-            task.wait(0.1)
+        if tick() - startTime > 5 then
+            humanoid.Jump = true
         end
         
-        return true
-    else
-        humanoid:MoveTo(targetPos)
-        local startTime = tick()
-        while (humanoidRootPart.Position - targetPos).Magnitude > 10 do
-            if tick() - startTime > 20 then
-                return false
-            end
-            if tick() - startTime > 5 and (humanoidRootPart.Position - targetPos).Magnitude < 15 then
-                humanoid.Jump = true
-            end
-            task.wait(0.1)
-        end
-        return true
+        task.wait(0.1)
     end
+    
+    return true
 end
 
 -- Main Movement Function
@@ -818,7 +763,7 @@ local function performContinuousMovement()
         local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
         if humanoid then
             humanoid:MoveTo(randomPos)
-            spawn(function()
+            task.spawn(function()
                 task.wait(2)
                 toggles.isMoving = false
                 toggles.currentTarget = nil
@@ -829,12 +774,14 @@ local function performContinuousMovement()
         end
     end
 end
--- Auto Sprinklers Functions
+-- Auto Sprinklers Functions - FIXED
 local function getFieldFlowerPart(fieldName)
-    local fieldsFolder = workspace:WaitForChild("Fields")
-    local field = fieldsFolder:WaitForChild(fieldName)
+    local fieldsFolder = Workspace:FindFirstChild("Fields")
+    if not fieldsFolder then return nil end
+    
+    local field = fieldsFolder:FindFirstChild(fieldName)
     if field then
-        return field:WaitForChild("FlowerPart")
+        return field:FindFirstChild("FlowerPart")
     end
     return nil
 end
@@ -842,36 +789,36 @@ end
 local function useSprinklerRemote(fieldName)
     local flowerPart = getFieldFlowerPart(fieldName)
     if not flowerPart then
-        addToConsole("❌ Could not find FlowerPart")
+        addToConsole("❌ Could not find FlowerPart for " .. fieldName)
         return false
     end
-    
-    local useItemRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("UseItem")
     
     local args = {
         "Sprinkler",
         flowerPart
     }
     
-    local success, result = pcall(function()
-        useItemRemote:FireServer(unpack(args))
+    local success = pcall(function()
+        UseItemRemote:FireServer(unpack(args))
         return true
     end)
     
     if success then
+        addToConsole("✅ Placed sprinkler at " .. fieldName)
         return true
     else
+        addToConsole("❌ Failed to place sprinkler")
         return false
     end
 end
 
 local function getPlacedSprinklersCount()
     local placedCount = 0
-    local character = GetCharacter()
+    local character = getCharacterSafe()
     
     if character then
         for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower():find("sprinkler") then
+            if tool:IsA("Tool") and string.find(tool.Name:lower(), "sprinkler") then
                 placedCount = placedCount + 1
             end
         end
@@ -880,7 +827,7 @@ local function getPlacedSprinklersCount()
     local backpack = player:FindFirstChild("Backpack")
     if backpack then
         for _, tool in pairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower():find("sprinkler") then
+            if tool:IsA("Tool") and string.find(tool.Name:lower(), "sprinkler") then
                 placedCount = placedCount + 1
             end
         end
@@ -1034,7 +981,7 @@ local function onCharacterDeath()
         
         task.wait(3)
         
-        local character = GetCharacter()
+        local character = getCharacterSafe()
         if character then
             task.wait(2)
             
@@ -1066,7 +1013,7 @@ local function onCharacterDeath()
 end
 
 local function setupDeathDetection()
-    local character = GetCharacter()
+    local character = getCharacterSafe()
     local humanoid = character:FindFirstChild("Humanoid")
     
     if humanoid then
@@ -1084,8 +1031,8 @@ end
 
 -- Auto Equip Tools Function
 local function equipAllTools()
-    local character = GetCharacter()
-    local humanoid = character and character:FindFirstChild("Humanoid")
+    local character = getCharacterSafe()
+    local humanoid = character:FindFirstChild("Humanoid")
     if not humanoid then return end
     
     local backpack = player:FindFirstChild("Backpack")
@@ -1108,14 +1055,14 @@ local function autoEquipTools()
     lastEquipTime = tick()
 end
 
--- Auto-dig function
+-- Auto-dig function - FIXED
 local function DigLoop()
     if digRunning then return end
     digRunning = true
     
     while toggles.autoDig and toggles.atField and not toggles.isConverting do
         SafeCall(function()
-            local char = GetCharacter()
+            local char = getCharacterSafe()
             local toolsFired = 0
             
             for _, tool in pairs(char:GetChildren()) do
@@ -1140,14 +1087,21 @@ end
 local isCollectingToken = false
 
 local function getNearestToken()
-    local tokensFolder = workspace:FindFirstChild("Debris") and workspace.Debris:FindFirstChild("Tokens")
+    local tokensFolder = Workspace:FindFirstChild("Debris")
+    if tokensFolder then
+        tokensFolder = tokensFolder:FindFirstChild("Tokens")
+    end
+    
     if not tokensFolder then return nil end
 
     for _, token in pairs(tokensFolder:GetChildren()) do
         if token:IsA("BasePart") and token:FindFirstChild("Token") then
-            local distance = (token.Position - player.Character.HumanoidRootPart.Position).Magnitude
-            if distance <= 30 and not toggles.visitedTokens[token] then
-                return token, distance
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local distance = (token.Position - char.HumanoidRootPart.Position).Magnitude
+                if distance <= 30 and not toggles.visitedTokens[token] then
+                    return token, distance
+                end
             end
         end
     end
@@ -1169,7 +1123,10 @@ local function collectTokens()
         if humanoid then
             humanoid:MoveTo(token.Position)
             local startTime = tick()
-            while (player.Character.HumanoidRootPart.Position - token.Position).Magnitude > 4 and tick() - startTime < 3 do
+            local char = player.Character
+            while char and char:FindFirstChild("HumanoidRootPart") and 
+                  (char.HumanoidRootPart.Position - token.Position).Magnitude > 4 and 
+                  tick() - startTime < 3 do
                 if not token.Parent then break end
                 task.wait()
             end
@@ -1179,8 +1136,7 @@ local function collectTokens()
         end
         isCollectingToken = false
     end
-end
--- Pollen Tracking
+end-- Pollen Tracking
 local function updatePollenTracking()
     if not toggles.atField then return end
     
@@ -1257,19 +1213,13 @@ local function startConverting()
             
             if not converterUsed or getCurrentPollen() > 0 then
                 addToConsole("🍯 Converting honey normally")
-                local makeHoneyRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("MakeHoney")
-                if makeHoneyRemote then
-                    local args = {true}
-                    makeHoneyRemote:FireServer(unpack(args))
-                end
+                local args = {true}
+                MakeHoneyRemote:FireServer(unpack(args))
             end
         else
             addToConsole("🍯 Converting honey")
-            local makeHoneyRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("MakeHoney")
-            if makeHoneyRemote then
-                local args = {true}
-                makeHoneyRemote:FireServer(unpack(args))
-            end
+            local args = {true}
+            MakeHoneyRemote:FireServer(unpack(args))
         end
     else
         toggles.isConverting = false
@@ -1313,7 +1263,7 @@ local function startFarming()
         end
         
         if toggles.autoDig then
-            spawn(DigLoop)
+            task.spawn(DigLoop)
         end
     else
         toggles.isFarming = false
@@ -1357,7 +1307,8 @@ end
 -- Walkspeed Management
 local function updateWalkspeed()
     if not toggles.walkspeedEnabled then return end
-    local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+    local character = getCharacterSafe()
+    local humanoid = character and character:FindFirstChild("Humanoid")
     if humanoid then 
         humanoid.WalkSpeed = toggles.walkspeed 
     end
@@ -1499,18 +1450,42 @@ local function updateStatusLabels()
         end
     end
     
-    if statusLabel then statusLabel:SetText("Status: " .. statusText) end
-    if pollenLabel then pollenLabel:SetText("Pollen: " .. formatNumberCorrect(currentPollen)) end
-    if hourlyHoneyLabel then hourlyHoneyLabel:SetText("Hourly Honey: " .. formatNumberCorrect(honeyStats.hourlyRate)) end
-    if sprinklerStatusLabel then sprinklerStatusLabel:SetText("Sprinklers: " .. placedSprinklersCount .. "/" .. expectedSprinklerCount .. " placed") end
+    if statusLabel then 
+        statusLabel:SetTitle("Status: " .. statusText)
+        statusLabel:SetDesc("Current activity status")
+    end
+    if pollenLabel then 
+        pollenLabel:SetTitle("Pollen: " .. formatNumberCorrect(currentPollen))
+        pollenLabel:SetDesc("Current pollen count")
+    end
+    if hourlyHoneyLabel then 
+        hourlyHoneyLabel:SetTitle("Hourly Honey: " .. formatNumberCorrect(honeyStats.hourlyRate))
+        hourlyHoneyLabel:SetDesc("Honey per hour rate")
+    end
+    if sprinklerStatusLabel then 
+        sprinklerStatusLabel:SetTitle("Sprinklers: " .. placedSprinklersCount .. "/" .. expectedSprinklerCount .. " placed")
+        sprinklerStatusLabel:SetDesc("Sprinkler placement status")
+    end
     
     -- Update debug labels
-    if honeyMadeLabel then honeyMadeLabel:SetText("Honey Made: " .. formatNumberCorrect(honeyStats.honeyMade)) end
-    if hourlyRateLabel then hourlyRateLabel:SetText("Hourly Rate: " .. formatNumberCorrect(honeyStats.hourlyRate)) end
-    if sessionHoneyLabel then sessionHoneyLabel:SetText("Session Honey: " .. formatNumberCorrect(honeyStats.sessionHoney)) end
-    if dailyHoneyLabel then dailyHoneyLabel:SetText("Daily Honey: " .. formatNumberCorrect(honeyStats.dailyHoney)) end
-end
--- Create WindUI Window
+    if honeyMadeLabel then 
+        honeyMadeLabel:SetTitle("Honey Made: " .. formatNumberCorrect(honeyStats.honeyMade))
+        honeyMadeLabel:SetDesc("Total honey made")
+    end
+    if hourlyRateLabel then 
+        hourlyRateLabel:SetTitle("Hourly Rate: " .. formatNumberCorrect(honeyStats.hourlyRate))
+        hourlyRateLabel:SetDesc("Honey per hour rate")
+    end
+    if sessionHoneyLabel then 
+        sessionHoneyLabel:SetTitle("Session Honey: " .. formatNumberCorrect(honeyStats.sessionHoney))
+        sessionHoneyLabel:SetDesc("This session's honey")
+    end
+    if dailyHoneyLabel then 
+        dailyHoneyLabel:SetTitle("Daily Honey: " .. formatNumberCorrect(honeyStats.dailyHoney))
+        dailyHoneyLabel:SetDesc("Today's honey")
+    end
+    end
+    -- Create WindUI Window
 Window = WindUI:CreateWindow({
     Title = "Lavender Hub",
     Icon = "flower",
@@ -1562,7 +1537,7 @@ local HomeSection = MainTab:Section({
     Opened = true
 })
 
-HomeSection:Paragraph({
+local homeStatsElement = HomeSection:Paragraph({
     Title = "Lavender Hub Stats",
     Desc = "Loading...",
     Locked = false
@@ -1592,7 +1567,8 @@ local fieldDropdown = FarmingSection:Dropdown({
 })
 
 -- Auto Farm Toggle
-FarmingSection:Toggle({
+local autoFarmToggle
+autoFarmToggle = FarmingSection:Toggle({
     Title = "Auto Farm",
     Desc = "Start automatic farming",
     Value = toggles.autoFarm,
@@ -1612,7 +1588,8 @@ FarmingSection:Toggle({
 })
 
 -- Auto Dig Toggle
-FarmingSection:Toggle({
+local autoDigToggle
+autoDigToggle = FarmingSection:Toggle({
     Title = "Auto Dig",
     Desc = "Automatically dig while farming",
     Value = toggles.autoDig,
@@ -1623,7 +1600,8 @@ FarmingSection:Toggle({
 })
 
 -- Auto Equip Toggle
-FarmingSection:Toggle({
+local autoEquipToggle
+autoEquipToggle = FarmingSection:Toggle({
     Title = "Auto Equip Tools",
     Desc = "Automatically equip tools",
     Value = toggles.autoEquip,
@@ -1640,7 +1618,8 @@ FarmingSection:Toggle({
 })
 
 -- Ticket Converters Toggle
-FarmingSection:Toggle({
+local ticketConvertersToggle
+ticketConvertersToggle = FarmingSection:Toggle({
     Title = "Use Ticket Converters",
     Desc = "Use ticket converters at hive",
     Value = useTicketConverters,
@@ -1656,7 +1635,8 @@ FarmingSection:Toggle({
 })
 
 -- Auto Sprinklers Toggle
-FarmingSection:Toggle({
+local autoSprinklersToggle
+autoSprinklersToggle = FarmingSection:Toggle({
     Title = "Auto Sprinklers",
     Desc = "Automatically place sprinklers",
     Value = autoSprinklersEnabled,
@@ -1676,7 +1656,8 @@ FarmingSection:Toggle({
 })
 
 -- Sprinkler Type Dropdown
-FarmingSection:Dropdown({
+local sprinklerTypeDropdown
+sprinklerTypeDropdown = FarmingSection:Dropdown({
     Title = "Sprinkler Type",
     Desc = "Select sprinkler type",
     Values = {"Broken Sprinkler", "Basic Sprinkler", "Silver Soakers", "Golden Gushers", "Diamond Drenchers", "Supreme Saturator"},
@@ -1696,7 +1677,8 @@ local MovementSection = FarmTab:Section({
 })
 
 -- Movement Method Dropdown
-MovementSection:Dropdown({
+local movementMethodDropdown
+movementMethodDropdown = MovementSection:Dropdown({
     Title = "Movement Method",
     Desc = "Select movement method",
     Values = {"Walk", "Tween"},
@@ -1708,7 +1690,8 @@ MovementSection:Dropdown({
 })
 
 -- Tween Speed Slider
-MovementSection:Slider({
+local tweenSpeedSlider
+tweenSpeedSlider = MovementSection:Slider({
     Title = "Tween Speed",
     Desc = "Tween movement speed",
     Step = 1,
@@ -1730,7 +1713,8 @@ local PlayerSection = FarmTab:Section({
 })
 
 -- Walkspeed Toggle
-PlayerSection:Toggle({
+local walkspeedToggle
+walkspeedToggle = PlayerSection:Toggle({
     Title = "Walkspeed",
     Desc = "Enable custom walkspeed",
     Value = toggles.walkspeedEnabled,
@@ -1745,7 +1729,8 @@ PlayerSection:Toggle({
 })
 
 -- Walkspeed Slider
-PlayerSection:Slider({
+local walkspeedSlider
+walkspeedSlider = PlayerSection:Slider({
     Title = "Walkspeed",
     Desc = "Custom walkspeed value",
     Step = 1,
@@ -1767,7 +1752,8 @@ local AntiLagSection = FarmTab:Section({
 })
 
 -- Anti-Lag Toggle
-AntiLagSection:Toggle({
+local antiLagToggle
+antiLagToggle = AntiLagSection:Toggle({
     Title = "Anti Lag",
     Desc = "Delete laggy objects",
     Value = toggles.antiLag,
@@ -1819,7 +1805,8 @@ local MountainBoosterSection = ToysTab:Section({
     Opened = true
 })
 
-MountainBoosterSection:Toggle({
+local mountainBoosterToggle
+mountainBoosterToggle = MountainBoosterSection:Toggle({
     Title = "Auto Mountain Booster",
     Desc = "Use every 30 minutes",
     Value = mountainBoosterEnabled,
@@ -1840,7 +1827,8 @@ local RedBoosterSection = ToysTab:Section({
     Opened = true
 })
 
-RedBoosterSection:Toggle({
+local redBoosterToggle
+redBoosterToggle = RedBoosterSection:Toggle({
     Title = "Auto Red Booster",
     Desc = "Use every 30 minutes",
     Value = redBoosterEnabled,
@@ -1861,7 +1849,8 @@ local BlueBoosterSection = ToysTab:Section({
     Opened = true
 })
 
-BlueBoosterSection:Toggle({
+local blueBoosterToggle
+blueBoosterToggle = BlueBoosterSection:Toggle({
     Title = "Auto Blue Booster",
     Desc = "Use every 30 minutes",
     Value = blueBoosterEnabled,
@@ -1882,7 +1871,8 @@ local WealthClockSection = ToysTab:Section({
     Opened = true
 })
 
-WealthClockSection:Toggle({
+local wealthClockToggle
+wealthClockToggle = WealthClockSection:Toggle({
     Title = "Auto Wealth Clock",
     Desc = "Use every 1 hour",
     Value = wealthClockEnabled,
@@ -2047,7 +2037,7 @@ DebugActionsSection:Button({
         consoleLogs = {}
         if consoleLabelElement then
             consoleLabelElement:SetTitle("Console cleared")
-            consoleLabelElement:SetDesc("")
+            consoleLabelElement:SetDesc("Console cleared at " .. os.date("%H:%M:%S"))
         end
     end
 })
@@ -2058,6 +2048,18 @@ DebugActionsSection:Button({
     Callback = function()
         equipAllTools()
         addToConsole("Manually equipped all tools")
+    end
+})
+
+DebugActionsSection:Button({
+    Title = "Test Sprinkler",
+    Desc = "Test sprinkler placement",
+    Callback = function()
+        if useSprinklerRemote(toggles.field) then
+            addToConsole("✅ Test sprinkler placed successfully")
+        else
+            addToConsole("❌ Test sprinkler failed")
+        end
     end
 })
 
@@ -2074,18 +2076,26 @@ setupDeathDetection()
 -- Load settings
 loadSettings()
 
--- Apply loaded settings
-fieldDropdown:Select(toggles.field)
-autoSprinklersEnabled = autoSprinklersEnabled
-selectedSprinkler = selectedSprinkler
-webhookEnabled = webhookEnabled
-webhookURL = webhookURL
-webhookInterval = webhookInterval
-useTicketConverters = useTicketConverters
-mountainBoosterEnabled = mountainBoosterEnabled
-redBoosterEnabled = redBoosterEnabled
-blueBoosterEnabled = blueBoosterEnabled
-wealthClockEnabled = wealthClockEnabled
+-- Apply loaded settings to UI elements
+if fieldDropdown then fieldDropdown:Select(toggles.field) end
+if autoFarmToggle then autoFarmToggle:Set(toggles.autoFarm) end
+if autoDigToggle then autoDigToggle:Set(toggles.autoDig) end
+if autoEquipToggle then autoEquipToggle:Set(toggles.autoEquip) end
+if antiLagToggle then antiLagToggle:Set(toggles.antiLag) end
+if movementMethodDropdown then movementMethodDropdown:Select(toggles.movementMethod) end
+if tweenSpeedSlider then tweenSpeedSlider:Set(toggles.tweenSpeed) end
+if walkspeedToggle then walkspeedToggle:Set(toggles.walkspeedEnabled) end
+if walkspeedSlider then walkspeedSlider:Set(toggles.walkspeed) end
+if autoSprinklersToggle then autoSprinklersToggle:Set(autoSprinklersEnabled) end
+if sprinklerTypeDropdown then sprinklerTypeDropdown:Select(selectedSprinkler) end
+if webhookToggleElement then webhookToggleElement:Set(webhookEnabled) end
+if webhookURLElement then webhookURLElement:Set(webhookURL) end
+if webhookIntervalElement then webhookIntervalElement:Set(webhookInterval) end
+if ticketConvertersToggle then ticketConvertersToggle:Set(useTicketConverters) end
+if mountainBoosterToggle then mountainBoosterToggle:Set(mountainBoosterEnabled) end
+if redBoosterToggle then redBoosterToggle:Set(redBoosterEnabled) end
+if blueBoosterToggle then blueBoosterToggle:Set(blueBoosterEnabled) end
+if wealthClockToggle then wealthClockToggle:Set(wealthClockEnabled) end
 
 -- Initialize honey tracking
 honeyStats.startHoney = getCurrentHoney()
@@ -2123,7 +2133,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- Stats update loop
-spawn(function()
+task.spawn(function()
     while task.wait(1) do
         local currentPollen = getCurrentPollen()
         local currentHoney = getCurrentHoney()
@@ -2147,11 +2157,8 @@ spawn(function()
         )
         
         -- Update home stats
-        if MainTab and MainTab:FindFirstChild("Statistics") then
-            local homeElement = MainTab:FindFirstChild("Statistics")
-            if homeElement then
-                homeElement:SetDesc(statsText)
-            end
+        if homeStatsElement then
+            homeStatsElement:SetDesc(statsText)
         end
     end
 end)
@@ -2177,3 +2184,5 @@ WindUI:Notify({
     Duration = 5,
     Icon = "flower"
 })
+
+addToConsole("⚠️ IMPORTANT: Make sure you have a hive before starting auto farm!")
