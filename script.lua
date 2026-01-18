@@ -1,5 +1,12 @@
--- Lavender Hub - WindUI Version (FIXED with Token Link Priority)
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+-- Lavender Hub - WindUI Version (Original)
+local success, WindUI = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+end)
+
+if not success then
+    warn("Failed to load WindUI, trying alternative...")
+    WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua"))()
+end
 
 -- Services
 local Players = game:GetService("Players")
@@ -10,13 +17,34 @@ local VirtualUser = game:GetService("VirtualUser")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Player
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
 
--- Remotes - FIXED: Find correct remotes
+-- Wait for character
+local character
+local humanoid
+
+-- Show loading notification
+task.spawn(function()
+    if WindUI and WindUI.Notify then
+        WindUI:Notify({
+            Title = "Lavender Hub",
+            Content = "Loading... Please wait",
+            Duration = 3,
+            Icon = "loader"
+        })
+    end
+end)
+
+-- Try to get character safely
+pcall(function()
+    character = player.Character or player.CharacterAdded:Wait()
+    humanoid = character:WaitForChild("Humanoid")
+end)
+
+-- Remotes
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local UseItemRemote = Remotes:WaitForChild("UseItem")
 local MakeHoneyRemote = Remotes:WaitForChild("MakeHoney")
@@ -208,6 +236,15 @@ local consoleLabelElement, statusLabel, pollenLabel, hourlyHoneyLabel, sprinkler
 local honeyMadeLabel, hourlyRateLabel, sessionHoneyLabel, dailyHoneyLabel
 local fpsLabel, memoryLabel, objectsLabel
 local webhookToggleElement, webhookURLElement, webhookIntervalElement
+
+-- Function to check if GUI loaded
+local function isGUILoaded()
+    return Window ~= nil
+end
+
+-- Manual GUI toggle key
+local guiVisible = true
+local toggleKey = Enum.KeyCode.RightControl
 -- Get current pollen value
 local function getCurrentPollen()
     local pollenValue = player:FindFirstChild("Pollen")
@@ -1026,7 +1063,7 @@ local function setupDeathDetection()
         if newHumanoid then
             newHumanoid.Died:Connect(onCharacterDeath)
         end
-    end
+    end)
 end
 
 -- Auto Equip Tools Function
@@ -1083,7 +1120,7 @@ local function DigLoop()
     digRunning = false
 end
 
--- TOKEN COLLECTION WITH TOKEN LINK PRIORITY - UPDATED
+-- Token Collection - ORIGINAL VERSION (No Token Link priority)
 local isCollectingToken = false
 
 local function getNearestToken()
@@ -1094,117 +1131,50 @@ local function getNearestToken()
     
     if not tokensFolder then return nil end
 
-    local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
-    local playerPos = char.HumanoidRootPart.Position
-    
-    local nearestToken = nil
-    local nearestDistance = math.huge
-    local tokenLinkFound = false
-    local tokenLinkDistance = math.huge
-    local tokenLink = nil
-    
     for _, token in pairs(tokensFolder:GetChildren()) do
         if token:IsA("BasePart") and token:FindFirstChild("Token") then
-            local distance = (token.Position - playerPos).Magnitude
-            
-            -- CHECK FOR TOKEN LINK SPECIFICALLY (HIGHEST PRIORITY)
-            if token.Name == "Token Link" and distance <= 60 then
-                if distance < tokenLinkDistance then
-                    tokenLinkDistance = distance
-                    tokenLink = token
-                    tokenLinkFound = true
-                end
-            -- Regular tokens
-            elseif distance <= 30 and not toggles.visitedTokens[token] then
-                if distance < nearestDistance then
-                    nearestDistance = distance
-                    nearestToken = token
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local distance = (token.Position - char.HumanoidRootPart.Position).Magnitude
+                if distance <= 30 and not toggles.visitedTokens[token] then
+                    return token, distance
                 end
             end
         end
     end
-    
-    -- PRIORITIZE TOKEN LINK OVER REGULAR TOKENS
-    if tokenLinkFound then
-        return tokenLink, tokenLinkDistance, true -- true indicates it's a Token Link
-    elseif nearestToken then
-        return nearestToken, nearestDistance, false -- false indicates regular token
-    end
-    
     return nil
 end
 
 local function areTokensNearby()
-    local token, distance, isTokenLink = getNearestToken()
+    local token = getNearestToken()
     return token ~= nil
 end
 
 local function collectTokens()
     if not toggles.autoFarm or toggles.isConverting or not toggles.atField or isCollectingToken then return end
     
-    local token, distance, isTokenLink = getNearestToken()
+    local token = getNearestToken()
     if token then
         isCollectingToken = true
-        
-        if isTokenLink then
-            addToConsole("⚡ PRIORITY: Token Link detected! Collecting immediately...")
-        end
-        
         local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
         if humanoid then
-            -- Use pathfinding for Token Link, simple movement for regular tokens
-            if isTokenLink then
-                local path = PathfindingService:CreatePath({
-                    AgentRadius = 2,
-                    AgentHeight = 5,
-                    AgentCanJump = true
-                })
-                
-                local success = pcall(function()
-                    path:ComputeAsync(humanoid.Parent.HumanoidRootPart.Position, token.Position)
-                end)
-                
-                if success and path.Status == Enum.PathStatus.Success then
-                    local waypoints = path:GetWaypoints()
-                    for i, waypoint in ipairs(waypoints) do
-                        if i > 1 then
-                            humanoid:MoveTo(waypoint.Position)
-                            local startTime = tick()
-                            while (humanoid.Parent.HumanoidRootPart.Position - waypoint.Position).Magnitude > 4 and tick() - startTime < 1 do
-                                task.wait()
-                            end
-                        end
-                    end
-                end
-            else
-                humanoid:MoveTo(token.Position)
-            end
-            
+            humanoid:MoveTo(token.Position)
             local startTime = tick()
             local char = player.Character
-            
-            -- Shorter timeout for Token Link since it's more important
-            local timeout = isTokenLink and 2 or 3
-            
             while char and char:FindFirstChild("HumanoidRootPart") and 
                   (char.HumanoidRootPart.Position - token.Position).Magnitude > 4 and 
-                  tick() - startTime < timeout do
+                  tick() - startTime < 3 do
                 if not token.Parent then break end
                 task.wait()
             end
-            
             if token.Parent then
                 toggles.visitedTokens[token] = true
-                if isTokenLink then
-                    addToConsole("✅ Successfully collected Token Link!")
-                end
             end
         end
         isCollectingToken = false
     end
-    end
-    -- Pollen Tracking
+end
+-- Pollen Tracking
 local function updatePollenTracking()
     if not toggles.atField then return end
     
@@ -1339,7 +1309,7 @@ local function startFarming()
     end
 end
 
--- Main Loop WITH TOKEN LINK PRIORITY
+-- Main Loop
 local lastUpdateTime = 0
 local function updateFarmState()
     if not toggles.autoFarm then return end
@@ -1352,17 +1322,10 @@ local function updateFarmState()
     updatePollenTracking()
     
     if toggles.isFarming and toggles.atField then
-        -- FIRST CHECK FOR TOKEN LINK (HIGHEST PRIORITY - INTERRUPTS EVERYTHING)
-        local token, distance, isTokenLink = getNearestToken()
-        if isTokenLink then
-            addToConsole("⚡ TOKEN LINK DETECTED! Stopping everything to collect...")
-            collectTokens()
-        -- Then check for conversion
-        elseif shouldConvertToHive() then
+        if shouldConvertToHive() then
             addToConsole("Converting to honey")
             startConverting()
         else
-            -- Check for regular tokens
             if areTokensNearby() then
                 collectTokens()
             elseif not toggles.isMoving then
@@ -1559,8 +1522,8 @@ local function updateStatusLabels()
         dailyHoneyLabel:SetTitle("Daily Honey: " .. formatNumberCorrect(honeyStats.dailyHoney))
         dailyHoneyLabel:SetDesc("Today's honey")
     end
-    end
-    -- Create WindUI Window
+end
+-- Create WindUI Window
 Window = WindUI:CreateWindow({
     Title = "Lavender Hub",
     Icon = "flower",
@@ -1569,7 +1532,8 @@ Window = WindUI:CreateWindow({
     Size = UDim2.fromOffset(580, 460),
     Theme = "Dark",
     Resizable = true,
-    Transparent = true
+    Transparent = true,
+    HideSearchBar = true
 })
 
 -- Create Tabs
@@ -2138,6 +2102,18 @@ DebugActionsSection:Button({
     end
 })
 
+-- Manual GUI toggle
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == toggleKey then
+        guiVisible = not guiVisible
+        -- Toggle GUI visibility
+        if Window and Window.Visible ~= nil then
+            Window.Visible = guiVisible
+            addToConsole(guiVisible and "GUI shown (RightControl)" or "GUI hidden (RightControl)")
+        end
+    end
+end)
+
 -- Anti-AFK
 player.Idled:Connect(function()
     VirtualUser:Button2Down(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
@@ -2241,12 +2217,12 @@ end)
 -- Final initialization
 addToConsole("✅ Lavender Hub v0.5 - WindUI Edition Ready!")
 addToConsole("🎯 Auto Farm System Ready!")
-addToConsole("⚡ TOKEN LINK PRIORITY SYSTEM ACTIVE - Will prioritize Token Link over everything!")
 addToConsole("🚿 Auto Sprinklers System Ready!")
 addToConsole("💀 Death Respawn System Ready!")
 addToConsole("🌐 Webhook System Ready!")
 addToConsole("🎫 Ticket Converters System Ready!")
 addToConsole("🎁 Toys/Boosters System Ready!")
+addToConsole("🔄 Press RightControl to toggle GUI visibility")
 if ownedHive then
     addToConsole("🏠 Owned Hive: " .. ownedHive)
 else
@@ -2256,10 +2232,9 @@ end
 -- Show welcome notification
 WindUI:Notify({
     Title = "Lavender Hub Loaded",
-    Content = "WindUI Edition - Token Link Priority Active!",
+    Content = "WindUI Edition - Press RightControl to toggle GUI",
     Duration = 5,
     Icon = "flower"
 })
 
 addToConsole("⚠️ IMPORTANT: Make sure you have a hive before starting auto farm!")
-addToConsole("🎯 Token Link Priority: Will stop everything to collect Token Links within 60 studs!")
